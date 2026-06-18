@@ -1,242 +1,187 @@
 import pygame
-import math
-from queue import PriorityQueue
+from config import *
+from gui import *
+from algorithms import AStar, Dijkstra, BFS, DFS
 
-# Configurações da Janela
-LARGURA = 800
-ALTURA = 600
-TELA = pygame.display.set_mode((LARGURA, ALTURA))
-pygame.display.set_caption("Visualizador do Algoritmo A*")
-
-# Cores
-VERMELHO = (255, 0, 0)      # Lista Fechada (Já visitado)
-VERDE = (0, 255, 0)         # Lista Aberta (Na fila para visitar)
-AZUL = (0, 0, 255)          # Ponto Alvo (Final)
-AMARELO = (255, 255, 0)     # Caminho Encontrado
-BRANCO = (255, 255, 255)    # Caminho Livre
-PRETO = (0, 0, 0)           # Obstáculo / Parede
-ROXO = (128, 0, 128)        # Caminho sendo construído (Visual)
-LARANJA = (255, 165 ,0)     # Ponto de Início
-CINZA = (128, 128, 128)     # Linhas do Grid
-
-class No:
-    def __init__(self, linha, col, largura, total_linhas):
-        self.linha = linha
-        self.col = col
-        self.x = linha * largura
-        self.y = col * largura
-        self.cor = BRANCO
-        self.largura = largura
-        self.total_linhas = total_linhas
-        self.vizinhos = []
-
-    def get_pos(self): return self.linha, self.col
-    
-    # Checagens de estado
-    def is_fechado(self): return self.cor == VERMELHO
-    def is_aberto(self): return self.cor == VERDE
-    def is_parede(self): return self.cor == PRETO
-    def is_inicio(self): return self.cor == LARANJA
-    def is_alvo(self): return self.cor == AZUL
-
-    # Mudanças de estado
-    def resetar(self): self.cor = BRANCO
-    def tornar_inicio(self): self.cor = LARANJA
-    def tornar_fechado(self): self.cor = VERMELHO
-    def tornar_aberto(self): self.cor = VERDE
-    def tornar_parede(self): self.cor = PRETO
-    def tornar_alvo(self): self.cor = AZUL
-    def tornar_caminho(self): self.cor = AMARELO
-
-    def desenhar(self, tela):
-        pygame.draw.rect(tela, self.cor, (self.x, self.y, self.largura, self.largura))
-
-    def atualizar_vizinhos(self, grid):
-        self.vizinhos = []
-        # Baixo
-        if self.linha < self.total_linhas - 1 and not grid[self.linha + 1][self.col].is_parede():
-            self.vizinhos.append(grid[self.linha + 1][self.col])
-        # Cima
-        if self.linha > 0 and not grid[self.linha - 1][self.col].is_parede():
-            self.vizinhos.append(grid[self.linha - 1][self.col])
-        # Direita
-        if self.col < self.total_linhas - 1 and not grid[self.linha][self.col + 1].is_parede():
-            self.vizinhos.append(grid[self.linha][self.col + 1])
-        # Esquerda
-        if self.col > 0 and not grid[self.linha][self.col - 1].is_parede():
-            self.vizinhos.append(grid[self.linha][self.col - 1])
-
-# Função Heurística (Distância de Manhattan)
-def heuristica(p1, p2):
-    x1, y1 = p1
-    x2, y2 = p2
-    return abs(x1 - x2) + abs(y1 - y2)
-
-# Função para reconstruir e pintar o caminho final
-def reconstruir_caminho(veio_de, atual, desenhar):
-    while atual in veio_de:
-        atual = veio_de[atual]
-        atual.tornar_caminho()
-        desenhar()
-
-# ALGORITMO A* PRINCIPAL
-def algoritmo_a_estrela(desenhar, grid, inicio, alvo):
-    count = 0
-    lista_aberta = PriorityQueue()
-    # Coloca o nó inicial na fila de prioridade com f(n) = 0
-    lista_aberta.put((0, count, inicio))
-    
-    veio_de = {} # Guarda o "Nó Pai" para traçar o caminho de volta
-    
-    # g(n): Custo real do caminho do início até o nó atual
-    g_score = {no: float("inf") for linha in grid for no in linha}
-    g_score[inicio] = 0
-    
-    # f(n) = g(n) + h(n)
-    f_score = {no: float("inf") for linha in grid for no in linha}
-    f_score[inicio] = heuristica(inicio.get_pos(), alvo.get_pos())
-
-    # Estrutura auxiliar para saber facilmente o que está na Lista Aberta
-    lista_aberta_hash = {inicio}
-
-    while not lista_aberta.empty():
-        # Permite fechar a janela enquanto o algoritmo roda
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-
-        # Pega o nó com o menor f(n)
-        atual = lista_aberta.get()[2]
-        lista_aberta_hash.remove(atual)
-
-        # Se chegamos no alvo, termina e desenha o caminho
-        if atual == alvo:
-            reconstruir_caminho(veio_de, alvo, desenhar)
-            alvo.tornar_alvo()
-            inicio.tornar_inicio()
-            return True
-
-        # Analisa os vizinhos do nó atual
-        for vizinho in atual.vizinhos:
-            custo_temp_g = g_score[atual] + 1
-
-            # Se achamos um caminho mais rápido para este vizinho
-            if custo_temp_g < g_score[vizinho]:
-                veio_de[vizinho] = atual
-                g_score[vizinho] = custo_temp_g
-                f_score[vizinho] = custo_temp_g + heuristica(vizinho.get_pos(), alvo.get_pos())
+def acionar_simulacao(grids, state, stats, linhas, colunas):
+    limpar_caminhos_busca(grids)
+    state['finish_order'] = []
+    for i in range(4):
+        stats[i] = {'visitados': 0, 'caminho': 0, 'passos': 0, 'status': 'Simulando...'}
+    for g in grids:
+        for row in g:
+            for node in row:
+                node.atualizar_vizinhos(g, linhas, colunas)
                 
-                # Adiciona na Lista Aberta se já não estiver lá
-                if vizinho not in lista_aberta_hash:
-                    count += 1
-                    lista_aberta.put((f_score[vizinho], count, vizinho))
-                    lista_aberta_hash.add(vizinho)
-                    vizinho.tornar_aberto() # Fica VERDE
+    ip, ap = state['inicio_pos'], state['alvo_pos']
+    for g in grids:
+        g[ip[0]][ip[1]].tornar_inicio()
+        g[ap[0]][ap[1]].tornar_alvo()
+        
+    state['generators'] = [
+        AStar(grids[0], grids[0][ip[0]][ip[1]], grids[0][ap[0]][ap[1]]),
+        Dijkstra(grids[1], grids[1][ip[0]][ip[1]], grids[1][ap[0]][ap[1]]),
+        BFS(grids[2], grids[2][ip[0]][ip[1]], grids[2][ap[0]][ap[1]]),
+        DFS(grids[3], grids[3][ip[0]][ip[1]], grids[3][ap[0]][ap[1]])
+    ]
+    state['gen_finished'] = [False] * 4
+    state['running'] = True
+    state['search_finished'] = False
 
-        desenhar()
+def gerenciar_eventos(grids, state, stats, linhas, colunas):
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            return False
+            
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                return False
+                
+            if not state['running']:
+                if event.key == pygame.K_SPACE and state['inicio_pos'] and state['alvo_pos']:
+                    acionar_simulacao(grids, state, stats, linhas, colunas)
+                elif event.key == pygame.K_c:
+                    limpar_tudo(grids, state, stats, linhas, colunas)
+                elif event.key == pygame.K_g:
+                    gerar_labirinto_dfs(grids, state, linhas, colunas)
+                    reiniciar_status(stats)
+                elif event.key == pygame.K_p:
+                    gerar_labirinto_prim(grids, state, linhas, colunas)
+                    reiniciar_status(stats)
+                elif event.key == pygame.K_r:
+                    gerar_obstaculos_organicos(grids, state, linhas, colunas)
+                    reiniciar_status(stats)
 
-        if atual != inicio:
-            atual.tornar_fechado() # Passa para a Lista Fechada (Fica VERMELHO)
+    return True
 
-    return False # Retorna Falso se não achar caminho nenhum
+def atualizar_passos_simulacao(state, stats, steps_per_frame):
+    if state['running']:
+        for _ in range(steps_per_frame):
+            all_done = True
+            for i in range(4):
+                if not state['gen_finished'][i]:
+                    all_done = False
+                    try:
+                        state['generators'][i].step()
+                        stats[i]['passos'] += 1
+                    except StopIteration:
+                        state['gen_finished'][i] = True
+                        if i not in state['finish_order']:
+                            state['finish_order'].append(i)
+            if all_done:
+                state['running'] = False
+                state['search_finished'] = True
+                break
 
-# Funções de Construção Visual (Grid e Tela)
-def criar_grid(linhas, largura):
-    grid = []
-    tamanho_no = largura // linhas
-    for i in range(linhas):
-        grid.append([])
-        for j in range(linhas):
-            no = No(i, j, tamanho_no, linhas)
-            grid[i].append(no)
-    return grid
+def atualizar_estatisticas(grids, stats, state):
+    for i in range(4):
+        visitados = sum(1 for row in grids[i] for node in row if node.is_fechado() or node.is_aberto())
+        caminho = sum(1 for row in grids[i] for node in row if node.cor == COR_CAMINHO)
+        stats[i]['visitados'] = visitados
+        stats[i]['caminho'] = caminho
+        
+        if not state['inicio_pos'] or not state['alvo_pos']:
+            stats[i]['status'] = "Configurando..."
+        elif state['running']:
+            if state['gen_finished'][i]:
+                stats[i]['status'] = "Concluído" if caminho > 0 else "Sem Caminho"
+            else:
+                stats[i]['status'] = "Simulando..."
+        elif state['search_finished']:
+            stats[i]['status'] = "Concluído" if caminho > 0 else "Sem Caminho"
+        else:
+            stats[i]['status'] = "Pronto"
 
-def desenhar_linhas_grid(tela, linhas, largura):
-    tamanho_no = largura // linhas
-    for i in range(linhas):
-        pygame.draw.line(tela, CINZA, (0, i * tamanho_no), (largura, i * tamanho_no))
-        for j in range(linhas):
-            pygame.draw.line(tela, CINZA, (j * tamanho_no, 0), (j * tamanho_no, largura))
-
-def desenhar_tudo(tela, grid, linhas, largura):
-    tela.fill(BRANCO)
-    for linha in grid:
-        for no in linha:
-            no.desenhar(tela)
-    desenhar_linhas_grid(tela, linhas, largura)
-    pygame.display.update()
-
-def pegar_pos_mouse(pos, linhas, largura):
-    tamanho_no = largura // linhas
-    y, x = pos
-    linha = y // tamanho_no
-    col = x // tamanho_no
-    return linha, col
-
-# LOOP PRINCIPAL DA APLICAÇÃO
-def main(tela, largura):
-    LINHAS = 50 # Quantidade de quadrados no grid
-    grid = criar_grid(LINHAS, largura)
-
-    inicio = None
-    alvo = None
+def main():
+    infoObject = pygame.display.Info()
+    LARGURA_TELA = infoObject.current_w
+    ALTURA_TELA = infoObject.current_h
+    
+    TELA = pygame.display.set_mode((LARGURA_TELA, ALTURA_TELA), pygame.FULLSCREEN)
+    pygame.display.set_caption("Comparador de Algoritmos de Busca: A*, Dijkstra, BFS, DFS")
+    
+    W_CARD = (LARGURA_TELA - 170) // 4
+    H_CARD = ALTURA_TELA - 150
+    
+    COLUNAS = (W_CARD - 40) // TAMANHO_NO
+    if COLUNAS % 2 == 0: COLUNAS -= 1
+    
+    LINHAS = (H_CARD - 325) // TAMANHO_NO
+    if LINHAS % 2 == 0: LINHAS -= 1
+    
+    GRID_W = COLUNAS * TAMANHO_NO
+    GRID_H = LINHAS * TAMANHO_NO
+    
+    OX_GRID = (W_CARD - GRID_W) // 2
+    OY_GRID = 85
+    
+    grids = [criar_grid(LINHAS, COLUNAS, TAMANHO_NO) for _ in range(4)]
+    
+    cards = [
+        {
+            'x': 40 + i * (W_CARD + 30), 'y': 110, 'width': W_CARD, 'height': H_CARD,
+            'titulo': titulo, 'formula': formula, 'subtitulo': sub, 'grid_idx': i
+        } for i, (titulo, formula, sub) in enumerate([
+            ("A* (A-Estrela)", "f(n) = g(n) + h(n)", "Heurística h(n) = Manhattan"),
+            ("Dijkstra", "f(n) = g(n)", "Busca cega por custo real g(n)"),
+            ("BFS (Busca em Largura)", "Fila (FIFO)", "Uniforme por níveis/camadas"),
+            ("DFS (Busca em Profundidade)", "Pilha (LIFO)", "Exploração linear profunda")
+        ])
+    ]
+    
+    state = {
+        'inicio_pos': None,
+        'alvo_pos': None,
+        'running': False,
+        'search_finished': False,
+        'finish_order': [],
+        'generators': [],
+        'gen_finished': [False] * 4
+    }
+    
+    stats = [
+        {'visitados': 0, 'caminho': 0, 'passos': 0, 'status': 'Aguardando'} for _ in range(4)
+    ]
+    
+    clock = pygame.time.Clock()
     rodando = True
-
+    
+    TELA = pygame.display.get_surface()
+    
+    # Gera cenário com obstáculos orgânicos por padrão ao iniciar
+    gerar_obstaculos_organicos(grids, state, LINHAS, COLUNAS)
+    
     while rodando:
-        desenhar_tudo(tela, grid, LINHAS, largura)
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                rodando = False
+        clock.tick(60)
+        
+        rodando = gerenciar_eventos(grids, state, stats, LINHAS, COLUNAS)
+        if not rodando:
+            break
+            
+        atualizar_passos_simulacao(state, stats, STEPS_PER_FRAME)
+        
+        for g in grids:
+            for row in g:
+                for node in row:
+                    if node.anim_scale < 1.0:
+                        node.anim_scale += 0.15
+                        if node.anim_scale > 1.0:
+                            node.anim_scale = 1.0
 
-            # Controles do Mouse
-            if pygame.mouse.get_pressed()[0]: # Botão Esquerdo (Desenhar)
-                pos = pygame.mouse.get_pos()
-                linha, col = pegar_pos_mouse(pos, LINHAS, largura)
-                no = grid[linha][col]
-                if not inicio and no != alvo:
-                    inicio = no
-                    inicio.tornar_inicio()
-                elif not alvo and no != inicio:
-                    alvo = no
-                    alvo.tornar_alvo()
-                elif no != inicio and no != alvo:
-                    no.tornar_parede()
+        atualizar_estatisticas(grids, stats, state)
 
-            elif pygame.mouse.get_pressed()[2]: # Botão Direito (Apagar)
-                pos = pygame.mouse.get_pos()
-                linha, col = pegar_pos_mouse(pos, LINHAS, largura)
-                no = grid[linha][col]
-                no.resetar()
-                if no == inicio:
-                    inicio = None
-                elif no == alvo:
-                    alvo = None
-
-            # Controles do Teclado
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE and inicio and alvo:
-                    for linha in grid:
-                        for no in linha:
-                            no.atualizar_vizinhos(grid)
-                    # Passa uma função lambda para o algoritmo conseguir atualizar a tela passo a passo
-                    algoritmo_a_estrela(lambda: desenhar_tudo(tela, grid, LINHAS, largura), grid, inicio, alvo)
-
-                if event.key == pygame.K_c: # Limpar a tela
-                    inicio = None
-                    alvo = None
-                    grid = criar_grid(LINHAS, largura)
-
+        TELA.fill((12, 12, 14))
+        desenhar_cabecalho(TELA, LARGURA_TELA, state)
+        
+        all_visited = [stats[idx]['visitados'] for idx in range(4)]
+        max_vis = max(all_visited) if all_visited else 1
+        if max_vis == 0:
+            max_vis = 1
+            
+        desenhar_cartoes(TELA, cards, grids, stats, state, OX_GRID, OY_GRID, GRID_W, GRID_H, H_CARD, max_vis)
+        pygame.display.update()
+        
     pygame.quit()
 
 if __name__ == "__main__":
-    main(TELA, LARGURA)
-
-"""
-Clique Esquerdo: Pinta o Ponto de Início (Laranja), depois o Alvo (Azul) e, em seguida, desenha as Paredes (Preto).
-
-Clique Direito: Apaga o que você clicou.
-
-Barra de Espaço: Inicia o algoritmo A*.
-
-Tecla 'C': Limpa todo o mapa.
-"""
+    main()
