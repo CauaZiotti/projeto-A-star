@@ -97,7 +97,7 @@ def main():
     LARGURA_TELA = infoObject.current_w
     ALTURA_TELA = infoObject.current_h
     
-    TELA = pygame.display.set_mode((LARGURA_TELA, ALTURA_TELA), pygame.FULLSCREEN)
+    TELA = pygame.display.set_mode((LARGURA_TELA, ALTURA_TELA), pygame.NOFRAME)
     pygame.display.set_caption("Comparador de Algoritmos de Busca: A*, Dijkstra, BFS, DFS")
     
     W_CARD = (LARGURA_TELA - 170) // 4
