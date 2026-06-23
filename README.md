@@ -45,7 +45,7 @@ pip install pygame
 Permite desenhar barreiras personalizadas e observar simultaneamente em 4 grids como cada algoritmo se comporta para encontrar a saída.
 
 **Vídeo de Demonstração:**
-<video src=".github/a-star-vs-others-algorithms.mp4" width="100%" controls></video>
+![](.github/a-star-vs-others-algorithms.gif)
 
 
 *   **Algoritmos Comparados:**
